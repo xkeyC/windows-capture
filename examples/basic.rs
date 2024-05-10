@@ -1,23 +1,21 @@
 use std::{
-    io::{self, Write},
-    time::Instant,
+    io::{self, Write}
 };
 
 use windows_capture::{
     capture::GraphicsCaptureApiHandler,
-    encoder::{VideoEncoder, VideoEncoderQuality, VideoEncoderType},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
     monitor::Monitor,
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
+use windows_capture::encoder::ImageEncoder;
+use windows_capture::frame::ImageFormat;
 
 // This struct will be used to handle the capture events.
 struct Capture {
     // The video encoder that will be used to encode the frames.
-    encoder: Option<VideoEncoder>,
-    // To measure the time the capture has been running
-    start: Instant,
+    encoder: Option<ImageEncoder>,
 }
 
 impl GraphicsCaptureApiHandler for Capture {
@@ -30,18 +28,12 @@ impl GraphicsCaptureApiHandler for Capture {
     // Function that will be called to create the struct. The flags can be passed from settings.
     fn new(message: Self::Flags) -> Result<Self, Self::Error> {
         println!("Got The Flag: {message}");
-
-        let encoder = VideoEncoder::new(
-            VideoEncoderType::Mp4,
-            VideoEncoderQuality::HD1080p,
-            1920,
-            1080,
-            "video.mp4",
-        )?;
-
+        let encoder = ImageEncoder::new(
+            ImageFormat::JpegXr,
+            ColorFormat::Rgba16F,
+        );
         Ok(Self {
-            encoder: Some(encoder),
-            start: Instant::now(),
+            encoder: Some(encoder)
         })
     }
 
@@ -51,31 +43,20 @@ impl GraphicsCaptureApiHandler for Capture {
         frame: &mut Frame,
         capture_control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
-        print!(
-            "\rRecording for: {} seconds",
-            self.start.elapsed().as_secs()
-        );
         io::stdout().flush()?;
-
+        capture_control.stop();
         // Send the frame to the video encoder
-        self.encoder.as_mut().unwrap().send_frame(frame)?;
-
-        // Note: The frame has other uses too for example you can save a single for to a file like this:
-        // frame.save_as_image("frame.png", ImageFormat::Png)?;
-        // Or get the raw data like this so you have full control:
-        // let data = frame.buffer()?;
-
-        // Stop the capture after 6 seconds
-        if self.start.elapsed().as_secs() >= 6 {
-            // Finish the encoder and save the video.
-            self.encoder.take().unwrap().finish()?;
-
-            capture_control.stop();
-
-            // Because there wasn't any new lines in previous prints
-            println!();
-        }
-
+        let mut buffer = frame.buffer().unwrap();
+        let frame_width = buffer.width();
+        let frame_height = buffer.height();
+        let raw_buffer = buffer.as_raw_buffer();
+        // write buffer to file
+        let encoder = self.encoder.as_mut().unwrap();
+        let jxr_data = encoder.encode(raw_buffer, frame_width, frame_height)?;
+        // write to file
+        let mut file = std::fs::File::create("frame.jxr")?;
+        file.write_all(&jxr_data)?;
+        // TODO convert to AVIF image ...
         Ok(())
     }
 
@@ -95,13 +76,13 @@ fn main() {
         // Item To Captue
         primary_monitor,
         // Capture Cursor Settings
-        CursorCaptureSettings::Default,
+        CursorCaptureSettings::WithCursor,
         // Draw Borders Settings
-        DrawBorderSettings::Default,
+        DrawBorderSettings::WithBorder,
         // The desired color format for the captured frame.
-        ColorFormat::Rgba8,
+        ColorFormat::Rgba16F,
         // Additional flags for the capture settings that will be passed to user defined `new` function.
-        "Yea This Works".to_string(),
+        "".to_string(),
     );
 
     // Starts the capture and takes control of the current thread.

@@ -108,14 +108,14 @@ impl ImageEncoder {
         let stream = InMemoryRandomAccessStream::new()?;
         let encoder = BitmapEncoder::CreateAsync(encoder, &stream)?.get()?;
 
-        let pixelformat = match self.color_format {
+        let pixel_format = match self.color_format {
             ColorFormat::Bgra8 => BitmapPixelFormat::Bgra8,
             ColorFormat::Rgba8 => BitmapPixelFormat::Rgba8,
-            ColorFormat::Rgba16F => return Err(ImageEncoderError::UnsupportedFormat),
+            ColorFormat::Rgba16F => BitmapPixelFormat::Rgba16,
         };
 
         encoder.SetPixelData(
-            pixelformat,
+            pixel_format,
             BitmapAlphaMode::Premultiplied,
             width,
             height,
@@ -125,17 +125,21 @@ impl ImageEncoder {
         )?;
 
         encoder.FlushAsync()?.get()?;
-
         let buffer = Buffer::Create(u32::try_from(stream.Size()?).unwrap())?;
         stream
             .ReadAsync(&buffer, buffer.Capacity()?, InputStreamOptions::None)?
             .get()?;
-
         let data_reader = DataReader::FromBuffer(&buffer)?;
         let length = data_reader.UnconsumedBufferLength()?;
         let mut bytes = vec![0u8; length as usize];
         data_reader.ReadBytes(&mut bytes)?;
 
+        if self.format == ImageFormat::JpegXr && self.color_format == ColorFormat::Rgba16F {
+            if bytes[0x000000A1] == 0x17 {
+                bytes[0x000000A1] = 0x3A; // magic
+                println!("info: use tyty jxr Rgba16F magic");
+            }
+        }
         Ok(bytes)
     }
 }
@@ -151,6 +155,7 @@ pub enum VideoEncoderError {
 }
 
 unsafe impl Send for VideoEncoderError {}
+
 unsafe impl Sync for VideoEncoderError {}
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
@@ -159,6 +164,7 @@ pub enum VideoEncoderType {
     Hevc,
     Mp4,
     Wmv,
+    Av1,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
@@ -229,6 +235,9 @@ impl VideoEncoder {
             }
             VideoEncoderType::Wmv => {
                 MediaEncodingProfile::CreateWmv(VideoEncodingQuality(encoder_quality as i32))?
+            }
+            VideoEncoderType::Av1 => {
+                MediaEncodingProfile::CreateAv1(VideoEncodingQuality(encoder_quality as i32))?
             }
         };
 
@@ -396,6 +405,9 @@ impl VideoEncoder {
             }
             VideoEncoderType::Wmv => {
                 MediaEncodingProfile::CreateWmv(VideoEncodingQuality(encoder_quality as i32))?
+            }
+            VideoEncoderType::Av1 => {
+                MediaEncodingProfile::CreateAv1(VideoEncodingQuality(encoder_quality as i32))?
             }
         };
 

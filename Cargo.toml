@@ -63,4 +63,3 @@ name = "basic"
 doc-scrape-examples = false
 
 [workspace]
-members = ["windows-capture-python"]
