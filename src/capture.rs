@@ -491,7 +491,7 @@ pub trait GraphicsCaptureApiHandler: Sized {
     fn on_frame_arrived(
         &mut self,
         frame: &mut Frame,
-        capture_control: InternalCaptureControl,
+        capture_control: InternalCaptureControl
     ) -> Result<(), Self::Error>;
 
     /// Optional handler called when the capture item (usually a window) closes.

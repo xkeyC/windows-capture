@@ -57,9 +57,3 @@ thiserror = "1.0.60"
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
 targets = ["x86_64-pc-windows-msvc"]
-
-[[example]]
-name = "basic"
-doc-scrape-examples = false
-
-[workspace]
